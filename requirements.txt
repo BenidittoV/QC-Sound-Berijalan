@@ -3,14 +3,7 @@ requests==2.32.3
 numpy==1.26.4
 pandas==2.2.2
 
-# audio utils
 pydub==0.25.1
 soundfile==0.12.1
 
-# transcription (gratis, lokal)
 faster-whisper==1.0.3
-
-# diarization (gratis, lokal; bisa berat)
-speechbrain==1.0.1
-torch==2.3.1
-torchaudio==2.3.1
