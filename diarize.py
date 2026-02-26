@@ -1,57 +1,29 @@
-from typing import List, Dict
+from pydub import AudioSegment
 import os
-import numpy as np
 
-# SpeechBrain diarization pipeline
-from speechbrain.inference.speaker import SpeakerDiarization
-
-def diarize_2speakers(audio_path: str) -> List[Dict]:
+def split_to_channels(audio_path: str, out_dir: str):
     """
-    Returns list of segments:
-      [{"start": float, "end": float, "speaker": "SPEAKER_0"}, ...]
+    Return (ch0_path, ch1_path, channels)
+    - If mono: (mono_path, None, 1)
+    - If stereo: (left_path, right_path, 2)
     """
-    # Model diarization speechbrain (download on first run)
-    # If streamlit cloud timeout, use shorter audio or lower compute.
-    diar = SpeakerDiarization.from_hparams(
-        source="speechbrain/speaker-diarization-3.1",
-        savedir="pretrained_models/speechbrain_diarization",
-        run_opts={"device": "cpu"},
-    )
-
-    # Speechbrain returns (timestamps, speakers) in RTTM-like form
-    # diar() can output RTTM file path if out_dir set
-    out_dir = "diar_out"
     os.makedirs(out_dir, exist_ok=True)
 
-    rttm_path = diar.diarize_file(audio_path, out_dir=out_dir)
-    segments = _parse_rttm(rttm_path)
-    # Normalize / sort
-    segments = sorted(segments, key=lambda x: (x["start"], x["end"]))
-    return segments
+    audio = AudioSegment.from_file(audio_path)
+    channels = audio.channels
 
-def _parse_rttm(rttm_path: str) -> List[Dict]:
-    segs = []
-    with open(rttm_path, "r", encoding="utf-8") as f:
-        for line in f:
-            parts = line.strip().split()
-            if len(parts) < 9:
-                continue
-            # RTTM: SPEAKER <file-id> 1 <start> <dur> <...> <speaker-id> <...>
-            start = float(parts[3])
-            dur = float(parts[4])
-            speaker = parts[7]
-            segs.append({"start": start, "end": start + dur, "speaker": speaker})
-    # merge tiny gaps
-    return _merge_close(segs, gap=0.25)
+    if channels == 1:
+        mono_path = os.path.join(out_dir, "mono.wav")
+        audio.set_frame_rate(16000).set_channels(1).export(mono_path, format="wav")
+        return mono_path, None, 1
 
-def _merge_close(segs: List[Dict], gap: float = 0.25) -> List[Dict]:
-    if not segs:
-        return segs
-    out = [segs[0].copy()]
-    for s in segs[1:]:
-        last = out[-1]
-        if s["speaker"] == last["speaker"] and s["start"] - last["end"] <= gap:
-            last["end"] = max(last["end"], s["end"])
-        else:
-            out.append(s.copy())
-    return out
+    # stereo (or more) -> take first two channels
+    ch = audio.split_to_mono()
+    left = ch[0].set_frame_rate(16000).set_channels(1)
+    right = ch[1].set_frame_rate(16000).set_channels(1)
+
+    left_path = os.path.join(out_dir, "ch0_left.wav")
+    right_path = os.path.join(out_dir, "ch1_right.wav")
+    left.export(left_path, format="wav")
+    right.export(right_path, format="wav")
+    return left_path, right_path, 2
