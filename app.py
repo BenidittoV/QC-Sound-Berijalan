@@ -13,7 +13,6 @@ import numpy as np
 import requests
 import streamlit as st
 
-import webrtcvad
 import soundfile as sf
 
 from sklearn.cluster import AgglomerativeClustering
